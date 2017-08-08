@@ -13,7 +13,6 @@ require("codemirror/mode/xml/xml.js");
 var CodeMirrorSpellChecker = require("codemirror-spell-checker");
 var marked = require("marked");
 
-
 // Some variables
 var isMac = /Mac/.test(navigator.platform);
 
@@ -110,6 +109,37 @@ function createIcon(options, enableTooltips, shortcuts) {
 
 	el.tabIndex = -1;
 	el.className = options.className;
+	return el;
+}
+
+function createDropdown(options, editor) {
+	options = options || {};
+	var el = document.createElement("select");
+
+	var defOpt = document.createElement("option");
+	defOpt.innerHTML = options.title;
+
+	el.appendChild(defOpt);
+
+	for(var i in options.elements) {
+		var opt = document.createElement("option");
+		opt.value = options.elements[i].value;
+		opt.innerHTML = options.elements[i].name;
+
+		el.appendChild(opt);
+	}
+
+	el.onchange = function(e) {
+		var cm = editor.codemirror;
+		var stat = getState(cm);
+		var options = editor.options;
+		_replaceSelection(cm, stat.image, [this.options[this.selectedIndex].value, ""]);
+		this.selectedIndex = 0;
+	};
+
+	el.tabIndex = -1;
+	el.className = options.className;
+
 	return el;
 }
 
@@ -1216,16 +1246,77 @@ var toolbarBuiltInButtons = {
 		name: "table",
 		action: drawTable,
 		className: "fa fa-table",
-		title: "Insert Table"
+		title: "Insert Table",
+		default: true
 	},
 	"horizontal-rule": {
 		name: "horizontal-rule",
 		action: drawHorizontalRule,
 		className: "fa fa-minus",
-		title: "Insert Horizontal Line"
+		title: "Insert Horizontal Line",
+		default: true
 	},
+    "page-break": {
+        name: "page-break",
+        action: function (editor) {
+            var cm = editor.codemirror;
+            var text = cm.getSelection();
+            cm.replaceSelection(text + "\n\n+++++\n\n");
+
+            //_replaceSelection(cm, stat.image, ["", "\n\n+++++\n\n"]);
+        },
+        className: "fa fa-file-o",
+        title: "Insert Page Break",
+        default: true
+    },
 	"separator-3": {
 		name: "separator-3"
+	},
+    "align-left": {
+        name: "align-left",
+        action: function (editor) {
+            var cm = editor.codemirror;
+            var text = cm.getSelection();
+            cm.replaceSelection("\n!!!left\n" + text + "\n!!!\n");
+        },
+        className: "fa fa-align-left",
+        title: "Align Left",
+        default: true
+    },
+    "align-center": {
+        name: "align-center",
+        action: function (editor) {
+            var cm = editor.codemirror;
+            var text = cm.getSelection();
+            cm.replaceSelection("\n!!!center\n" + text + "\n!!!\n");
+        },
+        className: "fa fa-align-center",
+        title: "Align Center",
+        default: true
+    },
+    "align-right": {
+        name: "align-right",
+        action: function (editor) {
+            var cm = editor.codemirror;
+            var text = cm.getSelection();
+            cm.replaceSelection("\n!!!right\n" + text + "\n!!!\n");
+        },
+        className: "fa fa-align-right",
+        title: "Align Right",
+        default: true
+    },
+    "align-justify": {
+        name: "align-justify",
+        action: function (editor) {
+            var cm = editor.codemirror;
+            var text = cm.getSelection();
+            cm.replaceSelection("\n!!!justify\n" + text + "\n!!!\n");
+        },
+        className: "fa fa-align-justify",
+        title: "Align Justified",
+    },
+	"separator-4": {
+		name: "separator-4"
 	},
 	"preview": {
 		name: "preview",
@@ -1246,16 +1337,6 @@ var toolbarBuiltInButtons = {
 		action: toggleFullScreen,
 		className: "fa fa-arrows-alt no-disable no-mobile",
 		title: "Toggle Fullscreen",
-		default: true
-	},
-	"separator-4": {
-		name: "separator-4"
-	},
-	"guide": {
-		name: "guide",
-		action: "https://simplemde.com/markdown-guide",
-		className: "fa fa-question-circle",
-		title: "Markdown Guide",
 		default: true
 	},
 	"separator-5": {
@@ -1300,6 +1381,7 @@ function SimpleMDE(options) {
 	// Handle options parameter
 	options = options || {};
 
+	console.log('options', options);
 
 	// Used later to refer to it"s parent
 	options.parent = this;
@@ -1341,12 +1423,12 @@ function SimpleMDE(options) {
 		return;
 	}
 
-
 	// Handle toolbar
 	if(options.toolbar === undefined) {
 		// Initialize
 		options.toolbar = [];
 
+		var toolbarButtons;
 
 		// Loop over the built in buttons, to get the preferred order
 		for(var key in toolbarBuiltInButtons) {
@@ -1360,7 +1442,15 @@ function SimpleMDE(options) {
 				}
 			}
 		}
+
+		if (options.addToolbar) {
+			for (var key in options.addToolbar) {
+				options.toolbar[key] = options.addToolbar[key];
+			}
+		}
 	}
+
+	console.log('toolbar', options.toolbar);
 
 
 	// Handle status bar
@@ -1721,7 +1811,7 @@ SimpleMDE.prototype.createToolbar = function(items) {
 	var toolbarData = {};
 	self.toolbar = items;
 
-	for(i = 0; i < items.length; i++) {
+	for(var i in items) {
 		if(items[i].name == "guide" && self.options.toolbarGuideIcon === false)
 			continue;
 
@@ -1751,9 +1841,13 @@ SimpleMDE.prototype.createToolbar = function(items) {
 
 		// Create the icon and append to the toolbar
 		(function(item) {
+
 			var el;
 			if(item === "|") {
 				el = createSep();
+			}
+			else if(item.dropdown !== undefined) {
+				el = createDropdown(item, self);
 			} else {
 				el = createIcon(item, self.options.toolbarTips, self.options.shortcuts);
 			}
